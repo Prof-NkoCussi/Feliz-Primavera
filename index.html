@@ -122,6 +122,24 @@
     background:radial-gradient(ellipse at 50% 30%, #fff08a, var(--amarillo) 55%, var(--amarillo2));
     z-index:3; pointer-events:none; animation:caer var(--t) linear forwards; }
   @keyframes caer { to { transform:translate(var(--dx), 110vh) rotate(720deg); opacity:.5; } }
+
+  /* ---------- Mariposas (encima del ramo z:5, debajo de botones z:7, frase z:8 y firma z:9) ---------- */
+  #mariposas { position:fixed; inset:0; z-index:6; pointer-events:none; overflow:hidden; }
+  .mariposa { position:absolute; left:0; top:0; width:var(--w); height:calc(var(--w) * .8);
+    pointer-events:none; will-change:transform; visibility:hidden; }
+  .mariposa svg { display:block; width:100%; height:100%; overflow:visible;
+    animation:impulso var(--vel, .12s) ease-in-out infinite alternate; }
+  .mariposa .ala-izq { transform-origin:0 0; transform-box:view-box;
+    animation:aleteoIzq var(--vel, .12s) ease-in-out infinite alternate; }
+  .mariposa .ala-der { transform-origin:0 0; transform-box:view-box;
+    animation:aleteoDer var(--vel, .12s) ease-in-out infinite alternate; }
+  .mariposa.quieta svg, .mariposa.quieta .ala-izq, .mariposa.quieta .ala-der { animation:none; }
+  @keyframes aleteoIzq { from { transform:scaleX(1); } to { transform:scaleX(.15); } }
+  @keyframes aleteoDer { from { transform:scaleX(1); } to { transform:scaleX(.15); } }
+  @keyframes impulso { from { transform:translateY(2px); } to { transform:translateY(-2px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .mariposa svg, .mariposa .ala-izq, .mariposa .ala-der { animation:none; }
+  }
 </style>
 </head>
 <body>
@@ -299,6 +317,279 @@
   hojaVideo.onclick = e => { if (e.target === hojaVideo) cerrarVideo(); };
 
   document.getElementById('abrir').onclick = mostrar;
+</script>
+
+<script>
+/* ---------- Mariposas animadas: SVG + CSS + un solo loop rAF ---------- */
+(() => {
+  const PALETAS = [
+    { c1:'#fff3a0', c2:'#ffc400', borde:'#c98400' },   // dorada
+    { c1:'#ffe0b8', c2:'#ff9a3c', borde:'#c96a14' },   // naranja suave
+    { c1:'#efe4ff', c2:'#a888ee', borde:'#6a4ff0' },   // lila
+    { c1:'#d7fbf6', c2:'#2ec4b6', borde:'#138a80' }    // turquesa
+  ];
+  const ANCHOS = [38, 32, 44, 35];
+  const VEL_RAPIDO = .12, VEL_PLANEO = .35, VEL_POSADA = .4;
+  const MARGEN = 20;
+  const reducir = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const ramoEl = document.getElementById('ramo');
+  const fraseEl = document.getElementById('frase');
+  const botonesEl = document.getElementById('botones');
+
+  let W = innerWidth, H = innerHeight;
+  let ms = [], t = 0, last = null, raf = 0, proxPosarse = 0, ramoDesde = 0, quietasListas = false;
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---- dibujo ----
+  function svgMariposa(p, id) {
+    const ala = `
+      <path d="M-1,-1 C-4,-20 -22,-38 -40,-34 C-52,-31 -48,-12 -30,-4 C-18,1 -8,2 -1,2Z" fill="url(#${id})" stroke="${p.borde}" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M-1,2 C-12,0 -32,4 -35,15 C-37,27 -21,32 -13,23 C-7,16 -4,10 -1,6Z" fill="url(#${id})" stroke="${p.borde}" stroke-width="1.1" stroke-linejoin="round"/>
+      <circle cx="-40" cy="-27" r="1.9" fill="#fff" opacity=".85"/>
+      <circle cx="-42" cy="-19" r="1.5" fill="#fff" opacity=".8"/>
+      <circle cx="-36" cy="-12" r="1.2" fill="#fff" opacity=".75"/>
+      <circle cx="-29" cy="20" r="1.6" fill="#fff" opacity=".8"/>
+      <circle cx="-21" cy="23" r="1.3" fill="#fff" opacity=".75"/>`;
+    return `<svg viewBox="-50 -40 100 80" aria-hidden="true">
+      <defs><radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="50">
+        <stop offset="0" stop-color="${p.c1}"/><stop offset="1" stop-color="${p.c2}"/></radialGradient></defs>
+      <g class="ala-izq">${ala}</g>
+      <g class="ala-der"><g transform="scale(-1 1)">${ala}</g></g>
+      <path d="M-1,-13 C-3,-21 -8,-26 -13,-27 M1,-13 C3,-21 8,-26 13,-27" stroke="#3b2a1a" stroke-width=".9" fill="none" stroke-linecap="round"/>
+      <circle cx="-13" cy="-27" r="1.2" fill="#3b2a1a"/><circle cx="13" cy="-27" r="1.2" fill="#3b2a1a"/>
+      <ellipse cx="0" cy="2" rx="2.1" ry="12" fill="#3b2a1a"/>
+      <circle cx="0" cy="-11" r="3.3" fill="#3b2a1a"/>
+    </svg>`;
+  }
+
+  function crear(i) {
+    const w = ANCHOS[i];
+    const el = document.createElement('div');
+    el.className = 'mariposa' + (reducir ? ' quieta' : '');
+    el.style.cssText = `--w:${w}px;--vel:${VEL_RAPIDO}s`;
+    el.innerHTML = svgMariposa(PALETAS[i], 'gmar' + i);
+    document.getElementById('mariposas').appendChild(el);
+    // entra desde un borde distinto cada una
+    const bordes = [[-w, H * .45], [W + w, H * .3], [W * .3, -w], [W * .7, H + w]];
+    return { el, svg: el.firstElementChild, w, h: w * .8, vel: VEL_RAPIDO,
+      vmax: rnd(40, 90), amp: rnd(10, 18), frq: rnd(1.8, 3.6), ph: rnd(0, 6.28),
+      x: bordes[i][0], y: bordes[i][1], vx: 0, vy: 0, tx: W / 2, ty: H / 2,
+      hx: 1, hy: 0, tilt: 0, face: 1,
+      estado: 'espera', inicio: i * .5, entrando: true,
+      planeando: false, finPlaneo: 0, proxPlaneo: rnd(8, 15),
+      flor: null, hasta: 0, quieta: false, proxQuieta: 0 };
+  }
+
+  // cambia la velocidad de aleteo sin saltos de fase
+  function setVel(m, v) {
+    if (m.vel === v) return;
+    const anims = m.el.getAnimations({ subtree: true });
+    const cts = anims.map(a => a.currentTime);
+    const viejo = m.vel;
+    m.vel = v;
+    m.el.style.setProperty('--vel', v + 's');
+    void m.el.offsetWidth;
+    anims.forEach((a, i) => { if (cts[i] != null) a.currentTime = cts[i] * v / viejo; });
+  }
+  function setQuieta(m, q) {
+    if (m.quieta === q) return;
+    m.quieta = q;
+    m.el.classList.toggle('quieta', q);
+  }
+
+  // ---- destinos ----
+  function zonasTexto() {
+    const zs = [];
+    for (const e of [fraseEl, botonesEl]) {
+      const b = e.getBoundingClientRect();
+      if (b.width && b.height) zs.push({ l: b.left - 10, r: b.right + 10, t: b.top - 10, b: b.bottom + 10 });
+    }
+    return zs;
+  }
+  function elegirDestino(m) {
+    const zs = zonasTexto();
+    let x, y;
+    for (let i = 0; i < 16; i++) {
+      x = rnd(MARGEN, W - MARGEN); y = rnd(MARGEN, H - MARGEN);
+      if (!zs.some(z => x > z.l && x < z.r && y > z.t && y < z.b) && Math.hypot(x - m.x, y - m.y) > 120) break;
+    }
+    m.tx = x; m.ty = y;
+  }
+
+  // ---- flores ----
+  function floresDisponibles(excluir) {
+    const minY = fraseEl.getBoundingClientRect().bottom + 15;
+    return [...ramoEl.querySelectorAll('.cabeza')].filter(f => {
+      if (excluir && excluir.includes(f)) return false;
+      const r = f.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      return r.width > 20 && cx > MARGEN && cx < W - MARGEN && cy > minY && cy < H - MARGEN;
+    });
+  }
+  function puntoFlor(f) {
+    const r = f.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2 - r.height * .1];
+  }
+
+  function intentarPosar() {
+    const ocupadas = ms.filter(m => m.estado === 'posada' || m.estado === 'aterriza');
+    if (ocupadas.length >= 2) return;
+    const libres = ms.filter(m => m.estado === 'vuelo' && !m.entrando);
+    const flores = floresDisponibles(ocupadas.map(m => m.flor));
+    if (!libres.length || !flores.length) return;
+    const m = libres[Math.floor(Math.random() * libres.length)];
+    m.flor = flores[Math.floor(Math.random() * flores.length)];
+    m.estado = 'aterriza';
+    setQuieta(m, false);
+    m.planeando = false;
+  }
+  function despegar(m) {
+    m.estado = 'vuelo'; m.flor = null;
+    setQuieta(m, false); setVel(m, VEL_RAPIDO);
+    m.vy = -25;
+    m.proxPlaneo = t + rnd(8, 15);
+    elegirDestino(m);
+  }
+
+  // ---- loop ----
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    if (last === null) last = now;
+    const dt = Math.min((now - last) / 1000, .05);
+    last = now;
+    if (dt <= 0) return;
+    t += dt;
+
+    if (t >= proxPosarse) {
+      if (ramoEl.classList.contains('ver') && t - ramoDesde > 4.2) intentarPosar();
+      proxPosarse = t + rnd(6, 10);
+    }
+
+    for (const m of ms) {
+      if (m.estado === 'espera') {
+        if (t < m.inicio) continue;
+        m.estado = 'vuelo';
+        m.el.style.visibility = 'visible';
+        elegirDestino(m);
+        const d = Math.hypot(m.tx - m.x, m.ty - m.y) || 1;
+        m.vx = (m.tx - m.x) / d * 35; m.vy = (m.ty - m.y) / d * 35;
+      }
+
+      let tx = m.tx, ty = m.ty;
+      if (m.estado === 'aterriza' || m.estado === 'posada') {
+        if (!m.flor.isConnected || m.flor.getBoundingClientRect().width < 10) { despegar(m); tx = m.tx; ty = m.ty; }
+        else [tx, ty] = puntoFlor(m.flor);
+      }
+      let dx = tx - m.x, dy = ty - m.y, dist = Math.hypot(dx, dy) || .001;
+
+      if (m.estado === 'vuelo') {
+        if (dist < 30) { elegirDestino(m); dx = m.tx - m.x; dy = m.ty - m.y; dist = Math.hypot(dx, dy) || .001; }
+        // planeo ocasional
+        if (!m.planeando && t >= m.proxPlaneo) { m.planeando = true; m.finPlaneo = t + rnd(1, 2); setVel(m, VEL_PLANEO); }
+        else if (m.planeando && t >= m.finPlaneo) { m.planeando = false; m.proxPlaneo = t + rnd(8, 15); setVel(m, VEL_RAPIDO); }
+      }
+
+      let wob = 1;
+      if (m.estado === 'posada') {
+        const k = 1 - Math.exp(-dt * 10);
+        m.x += dx * k; m.y += dy * k; m.vx = m.vy = 0; wob = 0;
+        if (t >= m.hasta) despegar(m);
+        else if (t >= m.proxQuieta) {
+          setQuieta(m, !m.quieta);
+          m.proxQuieta = t + (m.quieta ? rnd(.8, 1.6) : rnd(1.2, 2.4));
+        }
+      } else {
+        // steering suave: aceleración limitada hacia la velocidad deseada
+        let vm = m.vmax * (.85 + .15 * Math.sin(t * .9 + m.ph));
+        if (m.planeando) vm *= .7;
+        if (m.estado === 'aterriza') {
+          vm *= clamp(dist / 90, .15, 1);
+          wob = clamp(dist / 80, 0, 1);
+          setVel(m, dist < 90 ? VEL_PLANEO : VEL_RAPIDO);
+        }
+        const ax = dx / dist * vm - m.vx, ay = dy / dist * vm - m.vy;
+        const am = Math.hypot(ax, ay), lim = m.vmax * 2.5 * dt;
+        const f = am > lim ? lim / am : 1;
+        m.vx += ax * f; m.vy += ay * f;
+        m.x += m.vx * dt; m.y += m.vy * dt;
+
+        if (m.estado === 'aterriza' && dist < 6 && Math.hypot(m.vx, m.vy) < 25) {
+          m.estado = 'posada'; m.vx = m.vy = 0;
+          setVel(m, VEL_POSADA);
+          m.hasta = t + rnd(3, 5);
+          m.proxQuieta = t + rnd(.6, 1.4);
+        }
+      }
+
+      if (m.entrando && m.x > 0 && m.x < W && m.y > 0 && m.y < H) m.entrando = false;
+
+      // bamboleo perpendicular a la dirección de vuelo
+      const sp = Math.hypot(m.vx, m.vy);
+      if (sp > 6) {
+        const kh = Math.min(1, dt * 4);
+        m.hx += (m.vx / sp - m.hx) * kh; m.hy += (m.vy / sp - m.hy) * kh;
+        const n = Math.hypot(m.hx, m.hy) || 1; m.hx /= n; m.hy /= n;
+      }
+      const off = m.amp * Math.sin(t * m.frq + m.ph) * Math.min(1, sp / 25) * wob;
+      const rx = m.x - m.hy * off, ry = m.y + m.hx * off;
+
+      // inclinación y espejo según dirección horizontal
+      const tiltObj = m.estado === 'posada' ? 0 : clamp(m.vx / 60 * 25, -25, 25);
+      m.tilt += (tiltObj - m.tilt) * Math.min(1, dt * 5);
+      if (m.vx > 10) m.face = 1; else if (m.vx < -10) m.face = -1;
+
+      m.el.style.transform =
+        `translate3d(${(rx - m.w / 2).toFixed(2)}px,${(ry - m.h / 2).toFixed(2)}px,0) rotate(${m.tilt.toFixed(2)}deg) scaleX(${m.face})`;
+    }
+  }
+
+  // ---- movimiento reducido: quietas y posadas en lugares fijos ----
+  function colocarQuietas() {
+    const fl = floresDisponibles();
+    const fijos = [[.16, .42], [.84, .5], [.22, .7], [.78, .34]];
+    ms.forEach((m, i) => {
+      let x, y;
+      if (fl.length >= 4) [x, y] = puntoFlor(fl[Math.floor((i + .5) * fl.length / 4)]);
+      else [x, y] = [fijos[i][0] * W, fijos[i][1] * H];
+      m.el.style.visibility = 'visible';
+      m.el.style.transform = `translate3d(${(x - m.w / 2).toFixed(2)}px,${(y - m.h / 2).toFixed(2)}px,0)`;
+    });
+    quietasListas = true;
+  }
+
+  // ---- eventos ----
+  addEventListener('resize', () => {
+    W = innerWidth; H = innerHeight;
+    if (reducir) { if (quietasListas) colocarQuietas(); return; }
+    for (const m of ms) {
+      if (m.estado === 'espera' || m.entrando) continue;
+      if (m.estado === 'vuelo') {
+        if (m.x < 0 || m.x > W || m.y < 0 || m.y > H) { m.x = clamp(m.x, MARGEN, W - MARGEN); m.y = clamp(m.y, MARGEN, H - MARGEN); elegirDestino(m); }
+        else if (m.tx > W - MARGEN || m.ty > H - MARGEN) elegirDestino(m);
+      }
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { cancelAnimationFrame(raf); raf = 0; }
+    else if (!raf && ms.length && !reducir) { last = null; raf = requestAnimationFrame(frame); }
+  });
+
+  // ---- entrada: después del primer toque (el del botón del regalo) ----
+  function iniciar() {
+    const cont = document.createElement('div');
+    cont.id = 'mariposas';
+    document.body.appendChild(cont);
+    ms = PALETAS.map((_, i) => crear(i));
+    if (reducir) { setTimeout(colocarQuietas, 4200); return; }
+    ramoDesde = 0;
+    proxPosarse = rnd(6, 10);
+    raf = requestAnimationFrame(frame);
+  }
+  document.getElementById('abrir').addEventListener('click', iniciar, { once: true });
+})();
 </script>
 </body>
 </html>
