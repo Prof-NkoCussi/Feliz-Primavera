@@ -336,9 +336,10 @@
   const ramoEl = document.getElementById('ramo');
   const fraseEl = document.getElementById('frase');
   const botonesEl = document.getElementById('botones');
+  const inicioEl = document.getElementById('inicio');
 
   let W = innerWidth, H = innerHeight;
-  let ms = [], t = 0, last = null, raf = 0, proxPosarse = 0, ramoDesde = 0, quietasListas = false;
+  let ms = [], t = 0, last = null, raf = 0, proxPosarse = 0, ramoDesde = null, quietasListas = false;
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -403,7 +404,9 @@
   // ---- destinos ----
   function zonasTexto() {
     const zs = [];
-    for (const e of [fraseEl, botonesEl]) {
+    const enInicio = !inicioEl.classList.contains('oculto');
+    const evitar = enInicio ? inicioEl.querySelectorAll('.regalo, button') : [fraseEl, botonesEl];
+    for (const e of evitar) {
       const b = e.getBoundingClientRect();
       if (b.width && b.height) zs.push({ l: b.left - 10, r: b.right + 10, t: b.top - 10, b: b.bottom + 10 });
     }
@@ -463,9 +466,10 @@
     if (dt <= 0) return;
     t += dt;
 
+    if (ramoDesde === null && ramoEl.classList.contains('ver')) ramoDesde = t;
     if (t >= proxPosarse) {
-      if (ramoEl.classList.contains('ver') && t - ramoDesde > 4.2) intentarPosar();
-      proxPosarse = t + rnd(6, 10);
+      if (ramoDesde !== null && t - ramoDesde > 4.2) { intentarPosar(); proxPosarse = t + rnd(6, 10); }
+      else proxPosarse = t + 1;   // las flores todavía no se abrieron
     }
 
     for (const m of ms) {
@@ -577,18 +581,21 @@
     else if (!raf && ms.length && !reducir) { last = null; raf = requestAnimationFrame(frame); }
   });
 
-  // ---- entrada: después del primer toque (el del botón del regalo) ----
   function iniciar() {
     const cont = document.createElement('div');
     cont.id = 'mariposas';
     document.body.appendChild(cont);
     ms = PALETAS.map((_, i) => crear(i));
-    if (reducir) { setTimeout(colocarQuietas, 4200); return; }
-    ramoDesde = 0;
+    if (reducir) {
+      colocarQuietas();
+      document.getElementById('abrir').addEventListener('click', () => setTimeout(colocarQuietas, 4200), { once: true });
+      return;
+    }
     proxPosarse = rnd(6, 10);
     raf = requestAnimationFrame(frame);
   }
-  document.getElementById('abrir').addEventListener('click', iniciar, { once: true });
+  // desde que carga la página, en todas las pantallas
+  iniciar();
 })();
 </script>
 </body>
