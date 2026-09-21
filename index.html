@@ -54,24 +54,6 @@
     display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
     opacity:0; transition:opacity 1.2s, transform 1.2s; pointer-events:none; }
   .botones.ver { opacity:1; transform:translateX(-50%); }
-  .otra { pointer-events:auto; font-size:.9rem; padding:9px 18px; }
-  .cancion { color:#fff; background:linear-gradient(135deg, #ffa040, #ff7a00);
-    box-shadow:0 5px 0 #c25b00, 0 8px 20px rgba(255,122,0,.4); animation:pulso 1.8s ease-in-out infinite; }
-  .cancion:active { box-shadow:0 2px 0 #c25b00; }
-  @keyframes pulso { 50% { transform:scale(1.06); } }
-
-  /* ventana del video */
-  .hoja-video { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
-    padding:16px; background:rgba(40,25,70,.45); opacity:0; pointer-events:none; transition:opacity .4s; }
-  .hoja-video.abierta { opacity:1; pointer-events:auto; }
-  .tarjeta { width:min(100%, 560px); background:#f6f0ff; border-radius:20px; overflow:hidden;
-    box-shadow:0 20px 50px rgba(60,30,120,.4); transform:translateY(40px) scale(.95); transition:transform .4s; }
-  .hoja-video.abierta .tarjeta { transform:none; }
-  .cabecera { display:flex; align-items:center; justify-content:flex-end; padding:10px 12px;
-    font-style:italic; font-weight:700; color:#5540d1; }
-  .cerrar { padding:6px 12px; font-size:1rem; color:#fff; background:#7b61ff; box-shadow:none; border-radius:999px; }
-  .video { position:relative; aspect-ratio:16 / 9; background:#000; }
-  .video iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
 
   .firma { position:fixed; left:0; right:0; bottom:0; z-index:9; text-align:center;
     padding:10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -181,19 +163,7 @@
 
   <div class="ramo" id="ramo"></div>
 
-  <div class="botones" id="botones">
-    <button class="otra cancion" id="cancion">🎶 Tu canción<small>(Hace Click)</small></button>
-  </div>
-
-  <div class="hoja-video" id="hojaVideo">
-    <div class="tarjeta">
-      <div class="cabecera">
-        <button class="cerrar" id="cerrar" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="video"><iframe id="yt" title="Flores amarillas" allow="autoplay; encrypted-media; picture-in-picture"
-        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
-    </div>
-  </div>
+  <div class="botones" id="botones"></div>
 
   <footer class="firma" id="firma">
     
@@ -304,17 +274,11 @@
     lluvia = setInterval(petaloCae, 450);
   }
 
-  // ---- canción (para cambiar el video, reemplazá solo este ID) ----
-  const VIDEO_ID = 'hYO4eZqREvE';
-  const hojaVideo = document.getElementById('hojaVideo');
-  const yt = document.getElementById('yt');
-  document.getElementById('cancion').onclick = () => {
-    yt.src = `https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&rel=0&playsinline=1`;
-    hojaVideo.classList.add('abierta');
-  };
-  function cerrarVideo() { hojaVideo.classList.remove('abierta'); setTimeout(() => yt.src = '', 400); }
-  document.getElementById('cerrar').onclick = cerrarVideo;
-  hojaVideo.onclick = e => { if (e.target === hojaVideo) cerrarVideo(); };
+  // ---- música: arranca con el clic del regalo y suena siempre en loop ----
+  const musica = new Audio('audio.mp3');
+  musica.loop = true;
+  musica.preload = 'auto';
+  document.getElementById('abrir').addEventListener('click', () => { musica.play().catch(() => {}); });
 
   document.getElementById('abrir').onclick = mostrar;
 </script>
